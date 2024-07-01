@@ -36,7 +36,7 @@ jobs:
 
     - name: Create a new branch for the PR
       run: |
-        git checkout -b pr-branch
+        git checkout -b ${{ github.event.inputs.upstream_branch }}
 
     - name: Cherry-pick commits
       run: |
@@ -44,7 +44,7 @@ jobs:
 
     - name: Push to new branch
       run: |
-        git push origin pr-branch
+        git push origin ${{ github.event.inputs.upstream_branch }}
 
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@v3
