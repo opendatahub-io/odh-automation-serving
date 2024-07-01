@@ -1,0 +1,56 @@
+name: Create PR Upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: 'URL of the upstream repository'
+        required: true
+      upstream_branch:
+        description: 'Branch to create the PR against'
+        required: true
+      commit_message:
+        description: 'Commit message for the PR'
+        required: true
+      commit_shas:
+        description: 'SHA(s) of the commit(s) to cherry-pick (space-separated)'
+        required: true
+      pr_title:
+        description: 'Title for the pull request'
+        required: true
+      pr_body:
+        description: 'Body content for the pull request'
+        required: false
+
+jobs:
+  create-pr-upstream:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Git
+      run: |
+        git config --global user.name '${{ github.actor }}'
+        git config --global user.email '${{ github.actor }}@users.noreply.github.com'
+
+    - name: Create a new branch for the PR
+      run: |
+        git checkout -b pr-branch
+
+    - name: Cherry-pick commits
+      run: |
+        git cherry-pick ${{ github.event.inputs.commit_shas }}
+
+    - name: Push to new branch
+      run: |
+        git push origin pr-branch
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: ${{ github.event.inputs.commit_message }}
+        base: ${{ github.event.inputs.upstream_branch }}
+        title: ${{ github.event.inputs.pr_title }}
+        body: ${{ github.event.inputs.pr_body }}
