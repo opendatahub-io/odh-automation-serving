@@ -1,64 +1,89 @@
-name:  Push to Release Branch & Cherry Pick commits 
+name: Push to Release Branch & Cherry Pick commits
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_branch:
-        description: 'Branch to push to'
-        required: true
-      cherry_pick_commits:
-        description: 'Commits to cherry-pick'
-        required: true
+    workflow_dispatch:
+      inputs:
+        source_repo:
+          description: '[Upstream] source repository to cherry-pick from'
+          required: true
+          type: choice
+          options:
+            - 'openvino_model_server'
+            - 'kserve'
+            - 'modelmesh'
+            - 'caikit-tgis-serving'
+            - 'openvino'
+            - 'vllm'
+            - 'caikit-nlp'
+            - 'caikit'
+            - 'odh-model-controller'
+            - 'caikit-tgis-backend'
+            - 'caikit-nlp-client'
+            - 'model-registry'
+        source_branch:
+          description: 'Upstream branch to cherry-pick from'
+          required: true
+        cherry_pick_commits:
+          description: 'SHA(s) of the commit(s) to cherry-pick (space-separated)'
+          required: true
+        target_repo:
+          description: '[Downstream] Target repository to push to'
+          required: true
+          type: choice
+          options:
+            - 'openvino_model_server'
+            - 'kserve'
+            - 'modelmesh'
+            - 'caikit-tgis-serving'
+            - 'openvino'
+            - 'vllm'
+            - 'caikit-nlp'
+            - 'caikit'
+            - 'odh-model-controller'
+            - 'caikit-tgis-backend'
+            - 'caikit-nlp-client'
+            - 'model-registry'
+        target_branch:
+          description: 'Target branch to push to'
+          required: true
+  
 
-env:
-  ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
+permissions:
+  contents: write
+  
 
 jobs:
-  push-release-branch:
+  cherry-pick-and-create-pr:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-
-    - name: Set up Git
+    - name: Set repository names
+      id: set-repo
       run: |
-        git config --global user.name '${{ github.actor }}'
-        git config --global user.email '${{ github.actor }}@users.noreply.github.com'
-        
-    - name: Fetch all branches
-      run: git fetch --all
+        echo "source_repo=opendatahub.io/${{ github.event.inputs.source_repo }}" >> $GITHUB_OUTPUT
+        echo "target_repo=redhat-data-services/${{ github.event.inputs.target_repo }}" >> $GITHUB_OUTPUT
 
-    - name: Check if branch exists
-      id: check_branch
+
+    - name: Configure Git
       run: |
-        if git show-ref --verify --quiet refs/heads/${{ github.event.inputs.release_branch }}; then
-          echo "Branch already exists: ${{ github.event.inputs.release_branch }}"
-          echo "branch_exists=true" >> $GITHUB_ENV
-        else
-          echo "Branch does not exist: ${{ github.event.inputs.release_branch }}"
-          echo "branch_exists=false" >> $GITHUB_ENV
-        fi
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
 
-    - name: Create or checkout branch
+    - name: Checkout target repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.set-repo.outputs.target_repo }}
+        ref: ${{ github.event.inputs.target_branch }}
+        token: ${{ secrets.ACTIONS_PAT }}
+
+    - name: Add and fetch from upstream repo
       run: |
-        if [ "${{ env.branch_exists }}" = "true" ]; then
-          echo "Checking out existing branch: ${{ github.event.inputs.release_branch }}"
-          git checkout ${{ github.event.inputs.release_branch }}
-        else
-          echo "Creating and checking out new branch: ${{ github.event.inputs.release_branch }}"
-          git checkout -b ${{ github.event.inputs.release_branch }}
-        fi
+        git remote add upstream https://github.com/${{ steps.set-repo.outputs.source_repo }}.git
+        git fetch upstream 
+        git checkout ${{ github.event.inputs.target_branch }}
 
-    - name: Pull latest changes
-      if: env.branch_exists == 'true'
-      run: |
-        echo "Pulling latest changes for branch: ${{ github.event.inputs.release_branch }}"
-        git pull origin ${{ github.event.inputs.release_branch }} --rebase
-
-    - name: Cherry-pick commits
+    - name: Cherry-pick the commit
       id: cherry_pick
       run: |
-        echo "Cherry-picking commits: ${{ github.event.inputs.cherry_pick_commits }}"
         git cherry-pick ${{ github.event.inputs.cherry_pick_commits }} || echo "cherry_pick_failed=true" >> $GITHUB_ENV
 
     - name: Handle cherry-pick result
@@ -78,8 +103,8 @@ jobs:
     - name: Push to release branch
       run: |
         echo "Setting remote URL with personal access token"
-        git remote set-url origin https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/${{ github.repository }}.git
-        echo "Pulling latest changes for branch before pushing"
-        git pull origin ${{ github.event.inputs.release_branch }} --rebase
-        echo "Pushing changes to branch: ${{ github.event.inputs.release_branch }}"
-        git push origin ${{ github.event.inputs.release_branch }}
+        git remote set-url origin https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/${{ steps.set-repo.outputs.target_repo }}.git
+        echo "Pushing changes to branch: ${{ github.event.inputs.target_branch }}"
+        git push origin ${{ github.event.inputs.target_branch }}
+
+
