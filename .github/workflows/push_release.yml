@@ -1,10 +1,36 @@
-name: Push to Release Branch 
+name: Push to Release Branch Sync
 
 on:
   workflow_dispatch:
     inputs:
+      org:
+        description: 'Select Organization'
+        required: true
+        type: choice
+        options:
+          - 'opendatahub.io'
+          - 'red-hat-data-services'
+      sync_repo:
+        description: 'Select Repository'
+        required: true
+        type: choice
+        options:
+          - 'modelmesh'
+          - 'caikit-tgis-serving'
+          - 'openvino'
+          - 'vllm'
+          - 'caikit-nlp'
+          - 'caikit'
+          - 'odh-model-controller'
+          - 'caikit-tgis-backend'
+          - 'caikit-nlp-client'
+          - 'model-registry'
+      main_branch:
+        description: 'Main branch to pull from'
+        default: 'main'
+        required: true
       release_branch:
-        description: 'Branch to push to'
+        description: 'Branch to push to [release branch]'
         required: true
 
 env:
@@ -14,32 +40,35 @@ jobs:
   push-release-branch:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
 
-    - name: Set up Git
-      run: |
-        git config --global user.name '${{ github.actor }}'
-        git config --global user.email '${{ github.actor }}@users.noreply.github.com'
-    - name: Fetch all branches
-      run: git fetch --all
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
 
-    - name: Check if branch exists
-      id: check_branch
-      run: |
-        if git show-ref --verify --quiet refs/heads/${{ github.event.inputs.release_branch }}; then
-          echo "branch_exists=true" >> $GITHUB_ENV
-        else
-          echo "branch_exists=false" >> $GITHUB_ENV
-        fi
-    - name: Create or checkout branch
-      run: |
-        if [ "$branch_exists" = "true" ]; then
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+            token: ${{ secrets.ACTIONS_PAT }}
+
+      
+      - name: Print current repository
+        run: git remote -v
+
+      - name: Fetch all branches
+        run: git fetch --all
+
+      - name: Checkout release branch
+        run: |
           git checkout ${{ github.event.inputs.release_branch }}
-        else
-          git checkout -b ${{ github.event.inputs.release_branch }}
-        fi
-    - name: Push to release branch  
-      run: |
-        git remote set-url origin https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/${{ github.repository }}.git
-        git push origin ${{ github.event.inputs.release_branch }}
+
+      - name: Rebase main onto release branch
+        run: |
+            git rebase origin/${{ github.event.inputs.main_branch }} 
+
+      - name: Push changes
+        run: |
+          git push origin ${{ github.event.inputs.release_branch }} --force
+
+             
