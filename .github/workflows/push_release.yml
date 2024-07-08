@@ -1,4 +1,4 @@
-name: Push to Release Branch Sync
+name: Push Main to Release Branch Sync
 
 on:
   workflow_dispatch:
