@@ -1,4 +1,4 @@
-name: Push to Release Branch & Cherry Pick commits
+name: Push to Release Branch & Cherry Pick commits 
 
 on:
     workflow_dispatch:
@@ -8,18 +8,18 @@ on:
           required: true
           type: choice
           options:
-            - 'openvino_model_server'
-            - 'kserve'
-            - 'modelmesh'
+            - 'openvinotoolkit/model_server'
+            - 'kserve/kserve'
+            - 'kserve/modelmesh'
             - 'caikit-tgis-serving'
-            - 'openvino'
-            - 'vllm'
-            - 'caikit-nlp'
-            - 'caikit'
+            - 'openvinotoolkit/openvino'
+            - 'vllm-project/vllm'
+            - 'caikit/caikit-nlp'
+            - 'caikit/caikit'
             - 'odh-model-controller'
-            - 'caikit-tgis-backend'
+            - 'caikit/caikit-tgis-backend'
             - 'caikit-nlp-client'
-            - 'model-registry'
+            - 'kubeflow/model-registry'
         source_branch:
           description: 'Upstream branch to cherry-pick from'
           required: true
@@ -59,8 +59,8 @@ jobs:
     - name: Set repository names
       id: set-repo
       run: |
-        echo "source_repo=opendatahub.io/${{ github.event.inputs.source_repo }}" >> $GITHUB_OUTPUT
-        echo "target_repo=redhat-data-services/${{ github.event.inputs.target_repo }}" >> $GITHUB_OUTPUT
+        echo "source_repo=${{ github.event.inputs.source_repo }}" >> $GITHUB_OUTPUT
+        echo "target_repo=opendatahub.io/${{ github.event.inputs.target_repo }}" >> $GITHUB_OUTPUT
 
 
     - name: Configure Git
