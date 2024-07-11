@@ -62,12 +62,10 @@ jobs:
         fi
         if [ -n "$upstreamOwner" ] && [[ "${{ github.event.inputs.Pull_and_cherrypick }}" == "Upstream->Midstream(opendatahub-io)" ]]; then
           echo "upstream_org_repo=${{ github.event.inputs.upstream_repo }}"  >> $GITHUB_OUTPUT
-          # echo "target_org_repo=opendatahub-io/$repoName" >> $GITHUB_OUTPUT
-          echo "target_org_repo=rpancham/$repoName" >> $GITHUB_OUTPUT
+          echo "target_org_repo=opendatahub-io/$repoName" >> $GITHUB_OUTPUT 
         else
           echo "upstream_org_repo=opendatahub-io/$repoName"  >> $GITHUB_OUTPUT
-          # echo "target_org_repo=red-hat-data-services/$repoName" >> $GITHUB_OUTPUT
-          echo "target_org_repo=rpancham/$repoName" >> $GITHUB_OUTPUT
+          echo "target_org_repo=red-hat-data-services/$repoName" >> $GITHUB_OUTPUT  
         fi
     - name: Configure Git
       run: |
@@ -78,7 +76,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: ${{ steps.set-repo.outputs.target_org_repo }}
-        token: ${{ secrets.SYNC_UPSTREAM_TOKEN }}
+        token: ${{ secrets.PAT_TOKEN }}
         fetch-depth: 0
 
     - name: Add upstream repository & create cherry pick branch
@@ -105,8 +103,7 @@ jobs:
           else
             echo "Cherry-picking regular commit $commit"
             git cherry-pick "$commit" || (git cherry-pick --abort && exit 1)
-          fi
-         
+          fi   
         done
 
     - name: Push changes to cherry pick branch & Create a PR
@@ -119,4 +116,5 @@ jobs:
           --title "Cherry-pick of commits ${{ github.event.inputs.patch_commits }} into ${{ github.event.inputs.target_branch }}" \
           --body "$(echo -e "This is a auto genrated PR, Creating from odh-automation-serving\nCherry-pick of commits ${{ github.event.inputs.patch_commits }} into ${{ github.event.inputs.target_branch }}")"
       env:
-        GITHUB_TOKEN: ${{ secrets.SYNC_UPSTREAM_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        
