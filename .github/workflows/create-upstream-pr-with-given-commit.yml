@@ -19,7 +19,6 @@ on:
           - 'caikit/caikit-tgis-backend'
           - 'caikit-nlp-client'
           - 'kubeflow/model-registry'
-          - 'rpancham/automate-release'
       create_pr_at_upstream_or_midstream:
         description: 'Select Upstream or Midstream to create a PR'
         required: true
