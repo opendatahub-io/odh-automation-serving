@@ -1,4 +1,4 @@
-name: Demo Pull from Upstream
+name: Pull from Upstream
 
 on:
   workflow_dispatch:
@@ -33,6 +33,13 @@ on:
       target_branch:
         description: 'Target branch to pull into'
         required: true
+      force_sync:
+        description: 'Force sync the repository'
+        required: false
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   pull:
@@ -71,5 +78,5 @@ jobs:
         target_repository: ${{ steps.set-repo.outputs.target_org_repo }}
         upstream_branch: ${{ github.event.inputs.source_branch }}
         target_branch: ${{ github.event.inputs.target_branch }}
-        force: false
+        force: ${{ github.event.inputs.force_sync }}
         tags: false
