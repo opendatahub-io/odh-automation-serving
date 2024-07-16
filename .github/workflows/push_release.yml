@@ -1,4 +1,4 @@
-name: Push Main to Release Branch Sync
+name: Main branch to Release Branch Sync PR
 
 on:
   workflow_dispatch:
@@ -37,6 +37,8 @@ env:
   ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
 
 permissions:
+  # Need `contents: read` to checkout the repository
+  # Need `contents: write` to merge branches
   contents: write
   
 
@@ -64,30 +66,22 @@ jobs:
       - name: Fetch all branches
         run: git fetch --all
 
-
-      - name: Merge Master to Production branch
-        uses: devvspaces/merge-branches@v1
-        with:
-              token: ${{ secrets.ACTIONS_PAT }}
-              from_branch: ${{ github.event.inputs.main_branch }}
-              to_branch: ${{ github.event.inputs.release_branch }}
-      
-      - name: Create release-v2 branch if not exists
+      - name: Check out release branch
         run: |
-            git push -u origin ${{ github.event.inputs.release_branch }}  # Push release-v2 branch to remote
+          git checkout ${{ github.event.inputs.release_branch }}
+          git fetch origin
 
-    
+      - name: Merge main into release
+        run: |
+          git merge origin/main
+
       - name: Push changes to release branch & Create a PR
         run: |
-          git log -n 1 --pretty=format:"%H - %s"
-          git push -f origin ${{ github.event.inputs.release_branch }}
-          gh pr create --repo ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }} \
+            git push origin ${{ github.event.inputs.release_branch }}
+            gh pr create --repo ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }} \
             --head ${{ github.event.inputs.release_branch }} \
             --base ${{ github.event.inputs.main_branch }} \
             --title "Sync changes from ${{ github.event.inputs.main_branch }} to ${{ github.event.inputs.release_branch }}" \
             --body "This is an automated PR created by the GitHub Action to sync changes from the main branch to the release branch."
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}         
-
-
-             
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}            
