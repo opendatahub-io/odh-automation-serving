@@ -37,10 +37,7 @@ env:
   ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
 
 permissions:
-  # Need `contents: read` to checkout the repository
-  # Need `contents: write` to merge branches
   contents: write
-  
 
 jobs:
   push-release-branch:
@@ -51,7 +48,6 @@ jobs:
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -59,26 +55,34 @@ jobs:
             token: ${{ secrets.ACTIONS_PAT }}
             fetch-depth: 0
 
-      
       - name: Print current repository
         run: git remote -v
 
       - name: Fetch all branches
         run: git fetch --all
 
-      - name: Check out release branch
+      - name: Check out and create sync-release branch
         run: |
           git checkout ${{ github.event.inputs.release_branch }}
-          git fetch origin
-
-
-      - name: Push changes to release branch & Create a PR
+          git pull origin ${{ github.event.inputs.release_branch }}
+          git checkout -b sync-new-release
+      - name: Sync
+        uses: TobKed/github-forks-sync-action@master
+        with:
+          github_token: ${{ secrets.ACTIONS_PAT }}
+          upstream_repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+          target_repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+          upstream_branch: ${{ github.event.inputs.main_branch }}
+          target_branch: sync-new-release
+          force: false
+          tags: false
+        
+      - name: Create a PR
         run: |
-            git push origin ${{ github.event.inputs.release_branch }}
-            gh pr create --repo ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }} \
-            --head ${{ github.event.inputs.release_branch }} \
-            --base ${{ github.event.inputs.main_branch }} \
-            --title "Sync changes from ${{ github.event.inputs.main_branch }} to ${{ github.event.inputs.release_branch }}" \
-            --body "This is an automated PR created by the GitHub Action to sync changes from the main branch to the release branch."
+              gh pr create --repo ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }} \
+              --head sync-new-release \
+              --base ${{ github.event.inputs.release_branch }} \
+              --title "Sync changes from ${{ github.event.inputs.main_branch }} to ${{ github.event.inputs.release_branch }}" \
+              --body "This is an automated PR created by the GitHub Action to sync changes from the main branch to the release branch."
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}            
+            GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
