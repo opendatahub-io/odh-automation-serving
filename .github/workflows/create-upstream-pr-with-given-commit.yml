@@ -1,0 +1,132 @@
+name: Create PR upstream with given commit(s)
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: 'Select Upstream Repository'
+        required: true
+        type: choice
+        options:
+          - 'openvinotoolkit/model_server'
+          - 'kserve/kserve'
+          - 'kserve/modelmesh'
+          - 'caikit-tgis-serving'
+          - 'openvinotoolkit/openvino'
+          - 'vllm-project/vllm'
+          - 'caikit/caikit-nlp'
+          - 'caikit/caikit'
+          - 'odh-model-controller'
+          - 'caikit/caikit-tgis-backend'
+          - 'caikit-nlp-client'
+          - 'kubeflow/model-registry'
+      create_pr_at_upstream_or_midstream:
+        description: 'Select Upstream or Midstream to create a PR'
+        required: true
+        type: choice
+        options:
+           - 'Midstream(opendatahub-io)->Upstream'
+           - 'Downstream(red-hat-data-services)->Midstream(opendatahub-io)'
+      upstream_branch:
+        description: 'select Upstream branch to create a PR'
+        required: true
+      downstream_branch:
+        description: 'select downstream branch'
+        required: true
+      commit_sha:
+        description: 'Comma-separated list of commit SHAs to cherry-pick'
+        required: true
+      pr_branch:
+        description: 'Name of the branch for the PR'
+        required: true
+        type: string
+      pr_title:
+        description: 'Title of the pull request'
+        required: true
+        type: string
+      pr_body:
+        description: 'Body of the pull request'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  create-upstream-pr:
+    runs-on: ubuntu-latest
+    outputs: 
+        target_repo: ${{ steps.set-repo.outputs.target_org_repo }}
+    steps:
+    - name: Set repository
+      id: set-repo
+      run: |
+        if [[ "${{ github.event.inputs.upstream_repo }}" == *"/"* ]]; then
+          IFS='/' read -r upstreamOwner repoName <<< "${{ github.event.inputs.upstream_repo }}"
+        else
+          repoName=${{ github.event.inputs.upstream_repo }}
+          upstreamOwner=""
+        fi
+        if [[ "$repoName" == "model_server" ]]; then
+          repoName=""openvino_"$repoName"
+        fi
+        
+        if [ -n "$upstreamOwner" ] && [[ "${{ github.event.inputs.create_pr_at_upstream_or_midstream }}" == "Midstream(opendatahub-io)->Upstream" ]]; then
+          echo "upstream_org_repo=${{ github.event.inputs.upstream_repo }}"  >> $GITHUB_OUTPUT
+          echo "target_org_repo=opendatahub-io/$repoName" >> $GITHUB_OUTPUT
+         
+        else
+          echo "upstream_org_repo=opendatahub-io/$repoName"  >> $GITHUB_OUTPUT
+          echo "target_org_repo=red-hat-data-services/$repoName" >> $GITHUB_OUTPUT
+        fi
+    - name: Configure Git
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+
+    - name: Checkout repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.set-repo.outputs.target_org_repo }}
+        token: ${{ secrets.PAT_TOKEN }}
+        fetch-depth: 0
+
+    - name: Add upstream repository & create cherry pick branch
+      run: |
+        git remote add upstream https://github.com/${{ steps.set-repo.outputs.upstream_org_repo }}.git
+        git fetch upstream
+        if git merge-base --is-ancestor ${{ github.event.inputs.commit_sha }} upstream/${{ github.event.inputs.upstream_branch }}; then
+          echo "Commit already exists in the upstream branch."
+          exit 1
+        fi
+       
+    - name: Create temporary branch
+      run: |
+        git checkout upstream/${{ github.event.inputs.upstream_branch }}
+        git switch -c ${{ github.event.inputs.pr_branch }}
+  
+    - name: Cherry-pick commits
+      run: |
+        commits="${{ github.event.inputs.commit_sha }}"
+        IFS=',' read -ra commit_array <<< "$commits"
+        for commit in "${commit_array[@]}"; do
+          if git show --no-patch --format=%P $commit | grep -q ' '; then
+            echo "Cherry-picking merge commit $commit"
+            git cherry-pick -m 1 "$commit" || (git cherry-pick --abort && exit 1)
+          else
+            echo "Cherry-picking regular commit $commit"
+            git cherry-pick "$commit" || (git cherry-pick --abort && exit 1)
+          fi
+        done
+    - name: Push changes to cherry pick branch & Create a PR
+      run: |
+        git log -n 1 --pretty=format:"%H - %s"
+        git push -f origin ${{ github.event.inputs.pr_branch }}
+        gh pr create --repo ${{ steps.set-repo.outputs.upstream_org_repo }} \
+          --head ${{ steps.set-repo.outputs.ownerName }}:${{ github.event.inputs.pr_branch }} \
+          --base ${{ github.event.inputs.upstream_branch }} \
+          --title "${{ github.event.inputs.pr_title }}" \
+          --body "${{ github.event.inputs.pr_body }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
