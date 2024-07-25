@@ -1,0 +1,82 @@
+name: Pull from Upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: 'Select Upstream Repository'
+        required: true
+        type: choice
+        options:
+          - 'openvinotoolkit/model_server'
+          - 'kserve/kserve'
+          - 'kserve/modelmesh'
+          - 'caikit-tgis-serving'
+          - 'openvinotoolkit/openvino'
+          - 'vllm-project/vllm'
+          - 'caikit/caikit-nlp'
+          - 'caikit/caikit'
+          - 'odh-model-controller'
+          - 'caikit/caikit-tgis-backend'
+          - 'caikit-nlp-client'
+          - 'kubeflow/model-registry'
+      sync_repo:
+        description: 'Select Repository to sync'
+        required: true
+        type: choice
+        options:
+          - 'Upstream->Midstream(opendatahub-io)'
+          - 'Midstream(opendatahub-io)->Downstream(red-hat-data-services)'
+      source_branch:
+        description: 'Source branch to pull from'
+        required: true
+      target_branch:
+        description: 'Target branch to pull into'
+        required: true
+      force_sync:
+        description: 'Force sync the repository'
+        required: false
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    outputs: 
+        target_repo: ${{ steps.set-repo.outputs.target_org_repo }}
+    steps:
+    - name: Set repository
+      id: set-repo
+      run: |
+        if [[ "${{ github.event.inputs.upstream_repo }}" == *"/"* ]]; then
+          IFS='/' read -r upstreamOwner repoName <<< "${{ github.event.inputs.upstream_repo }}"
+        else
+          repoName=${{ github.event.inputs.upstream_repo }}
+          upstreamOwner=""
+        fi
+        if [[ "$repoName" == "model_server" ]]; then
+          repoName=""openvino_"$repoName"
+        fi
+        if [ -n "$upstreamOwner" ] && [[ "${{ github.event.inputs.sync_repo }}" == "Upstream->Midstream(opendatahub-io)" ]]; then
+          echo "upstream_org_repo=${{ github.event.inputs.upstream_repo }}"  >> $GITHUB_OUTPUT
+          echo "target_org_repo=opendatahub-io/$repoName" >> $GITHUB_OUTPUT 
+        else
+          echo "upstream_org_repo=opendatahub-io/$repoName"  >> $GITHUB_OUTPUT
+          echo "target_org_repo=red-hat-data-services/$repoName" >> $GITHUB_OUTPUT
+        fi
+    - name: Set git config
+      run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+    - name: sync
+      uses: TobKed/github-forks-sync-action@master
+      with:
+        github_token: ${{ secrets.PAT_TOKEN }}
+        upstream_repository: ${{ steps.set-repo.outputs.upstream_org_repo }}
+        target_repository: ${{ steps.set-repo.outputs.target_org_repo }}
+        upstream_branch: ${{ github.event.inputs.source_branch }}
+        target_branch: ${{ github.event.inputs.target_branch }}
+        force: ${{ github.event.inputs.force_sync }}
+        tags: false
