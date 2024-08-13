@@ -1,0 +1,88 @@
+name: Main branch to Release Branch Sync PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: 'Select Organization'
+        required: true
+        type: choice
+        options:
+          - 'opendatahub.io'
+          - 'red-hat-data-services'
+      sync_repo:
+        description: 'Select Repository'
+        required: true
+        type: choice
+        options:
+          - 'modelmesh'
+          - 'caikit-tgis-serving'
+          - 'openvino'
+          - 'vllm'
+          - 'caikit-nlp'
+          - 'caikit'
+          - 'odh-model-controller'
+          - 'caikit-tgis-backend'
+          - 'caikit-nlp-client'
+          - 'model-registry'
+      main_branch:
+        description: 'Main branch to pull from'
+        default: 'main'
+        required: true
+      release_branch:
+        description: 'Branch to push to [release branch]'
+        required: true
+
+env:
+  ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
+
+permissions:
+  contents: write
+
+jobs:
+  push-release-branch:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+            token: ${{ secrets.ACTIONS_PAT }}
+            fetch-depth: 0
+
+      - name: Print current repository
+        run: git remote -v
+
+      - name: Fetch all branches
+        run: git fetch --all
+
+      - name: Check out and create sync-release branch
+        run: |
+          git checkout ${{ github.event.inputs.release_branch }}
+          git pull origin ${{ github.event.inputs.release_branch }}
+          git checkout -b sync-new-release
+      - name: Sync
+        uses: TobKed/github-forks-sync-action@master
+        with:
+          github_token: ${{ secrets.ACTIONS_PAT }}
+          upstream_repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+          target_repository: ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }}
+          upstream_branch: ${{ github.event.inputs.main_branch }}
+          target_branch: sync-new-release
+          force: false
+          tags: false
+        
+      - name: Create a PR
+        run: |
+              gh pr create --repo ${{ github.event.inputs.org }}/${{ github.event.inputs.sync_repo }} \
+              --head sync-new-release \
+              --base ${{ github.event.inputs.release_branch }} \
+              --title "Sync changes from ${{ github.event.inputs.main_branch }} to ${{ github.event.inputs.release_branch }}" \
+              --body "This is an automated PR created by the GitHub Action to sync changes from the main branch to the release branch."
+        env:
+            GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
